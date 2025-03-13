@@ -1,0 +1,97 @@
+/* Light Theme stylesheet */
+QWidget {
+    background-color: #f0f0f0;
+    color: #000000;
+}
+
+QGroupBox {
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 3px;
+    background-color: #f0f0f0;
+}
+
+QPushButton {
+    background-color: #f0f0f0;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+QPushButton:hover {
+    background-color: #e0e0e0;
+}
+
+QPushButton:pressed {
+    background-color: #d0d0d0;
+}
+
+QComboBox, QSpinBox, QLineEdit {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+QTabWidget::pane {
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+}
+
+QTabBar::tab {
+    background-color: #e0e0e0;
+    border: 1px solid #cccccc;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    padding: 4px 8px;
+}
+
+QTabBar::tab:selected {
+    background-color: #ffffff;
+}
+
+QListWidget {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+}
+
+QSplitter::handle {
+    background-color: #cccccc;
+}
+
+QScrollBar {
+    background-color: #f0f0f0;
+}
+
+QHeaderView::section {
+    background-color: #e0e0e0;
+    border: 1px solid #cccccc;
+}
+
+QMenu {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+}
+
+QMenu::item {
+    padding: 4px 20px 4px 20px;
+}
+
+QMenu::item:selected {
+    background-color: #e0e0e0;
+}
+
+QToolTip {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+    color: #000000;
+}
