@@ -1,6 +1,6 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QSplashScreen, QLabel, QVBoxLayout, QProgressBar, QWidget
+from PyQt5.QtWidgets import QApplication, QSplashScreen, QLabel, QVBoxLayout, QProgressBar, QWidget, QPushButton
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from ui.main_window import MainWindow

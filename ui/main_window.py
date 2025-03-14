@@ -8,8 +8,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPu
                             QLineEdit, QSpinBox, QCheckBox, QFileDialog, QMessageBox,
                             QListWidgetItem, QMenu, QAction, QSplitter, QDialog,
                             QFormLayout, QDialogButtonBox, QRadioButton, QButtonGroup)
-
-from controllers.adb_controller import AdbController, ScreenCaptureThread
+from controllers.adb_controller import AdbController, ScreenCaptureThread, DeviceManager
 from controllers.action_recorder import ActionRecorder, ActionType
 from controllers.action_player import ActionPlayer
 from controllers.opencv_processor import OpenCVProcessor
