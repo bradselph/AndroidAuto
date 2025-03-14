@@ -1,17 +1,19 @@
 import os
 import time
 import threading
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QSize, QEvent
-from PyQt5.QtGui import QImage, QPixmap, QIcon, QCursor
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QSize, QEvent, QDateTime, QTime
+from PyQt5.QtGui import QImage, QPixmap, QIcon, QCursor, QColor
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                             QLabel, QComboBox, QListWidget, QTabWidget, QGroupBox, 
                             QLineEdit, QSpinBox, QCheckBox, QFileDialog, QMessageBox,
                             QListWidgetItem, QMenu, QAction, QSplitter, QDialog,
-                            QFormLayout, QDialogButtonBox, QRadioButton, QButtonGroup)
+                            QFormLayout, QDialogButtonBox, QRadioButton, QButtonGroup,
+                            QDateTimeEdit, QTimeEdit, QDoubleSpinBox)
 from controllers.adb_controller import AdbController, ScreenCaptureThread, DeviceManager
 from controllers.action_recorder import ActionRecorder, ActionType
 from controllers.action_player import ActionPlayer
 from controllers.opencv_processor import OpenCVProcessor
+from controllers.scheduler import TaskScheduler, ScheduleType
 from ui.screen_widget import ScreenWidget
 from ui.themes import ThemeManager
 from utils.config_manager import ConfigManager
@@ -633,10 +635,6 @@ class MainWindow(QMainWindow):
         self.action_player.action_completed.connect(self.on_action_completed)
 
         # Conditional action
-        self.add_action_btn.clicked.connect(self.add_action)
-
-        self.add_conditional_btn = QPushButton("Add Conditional")
-        recording_layout.addWidget(self.add_conditional_btn)
         self.add_conditional_btn.clicked.connect(self.add_conditional_action)
 
         # Scheduler buttons
