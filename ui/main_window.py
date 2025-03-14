@@ -19,8 +19,7 @@ from utils.config_manager import ConfigManager
 from utils.logger import Logger
 
 class AddActionDialog(QDialog):
-    """Dialog for adding a new action"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Add Action")
@@ -198,7 +197,6 @@ class AddActionDialog(QDialog):
             self.template_path_edit.setText(filename)
     
     def get_action_data(self):
-        """Get action type and data based on user input"""
         if self.action_type == ActionType.TAP:
             return ActionType.TAP, {
                 'x': self.x_spin.value(),
@@ -264,15 +262,20 @@ class AddActionDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    """Main application window"""
-    
-    def __init__(self):
+
+    def __init__(self, config_manager=None, driver_manager=None):
         super().__init__()
         self.setWindowTitle("Android Automation Tool")
         self.setMinimumSize(1200, 800)
         
+        # Initialize managers
+        self.config_manager = config_manager or ConfigManager()
+        self.driver_manager = driver_manager or DriverManager(self.config_manager)
+
         # Initialize controllers
-        self.adb_controller = AdbController()
+        adb_path = self.driver_manager.get_adb_path()
+        self.device_manager = DeviceManager(self.driver_manager)
+        self.adb_controller = AdbController(None, adb_path)
         self.opencv_processor = OpenCVProcessor(self.adb_controller)
         self.action_recorder = ActionRecorder()
         self.action_player = ActionPlayer(self.adb_controller, self.opencv_processor)
@@ -297,10 +300,10 @@ class MainWindow(QMainWindow):
         
         # Initialize UI
         self.init_ui()
-        
+
         # Load configuration
         self.load_config()
-        
+
         # Connect signals
         self.connect_signals()
         
@@ -309,9 +312,18 @@ class MainWindow(QMainWindow):
         
         # Start timers
         self.init_timers()
-    
+
+        # Check for drivers
+        self.check_drivers()
+
+        self.task_scheduler = TaskScheduler(self.action_player, self.logger)
+        self.task_scheduler.start()
+
+        # Update UI
+        self.refresh_devices()
+        self.update_scheduled_tasks_list()
+
     def init_ui(self):
-        """Initialize the user interface"""
         # Central widget with layout
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -361,7 +373,6 @@ class MainWindow(QMainWindow):
         self.right_splitter.setSizes([600, 200])
     
     def init_device_group(self):
-        """Initialize device connection group"""
         device_group = QGroupBox("Device Connection")
         device_layout = QVBoxLayout()
         
@@ -384,7 +395,6 @@ class MainWindow(QMainWindow):
         self.control_layout.addWidget(device_group)
     
     def init_recording_group(self):
-        """Initialize recording controls group"""
         recording_group = QGroupBox("Recording")
         recording_layout = QVBoxLayout()
         
@@ -394,10 +404,14 @@ class MainWindow(QMainWindow):
         recording_layout.addWidget(self.record_btn)
         recording_layout.addWidget(self.stop_record_btn)
         
-        # Add action button
+        # Add action buttons
+        action_buttons_layout = QHBoxLayout()
         self.add_action_btn = QPushButton("Add Action")
-        recording_layout.addWidget(self.add_action_btn)
-        
+        self.add_conditional_btn = QPushButton("Add Conditional")
+        action_buttons_layout.addWidget(self.add_action_btn)
+        action_buttons_layout.addWidget(self.add_conditional_btn)
+        recording_layout.addLayout(action_buttons_layout)
+
         # Save/load buttons
         buttons_layout = QHBoxLayout()
         self.save_recording_btn = QPushButton("Save")
@@ -410,7 +424,6 @@ class MainWindow(QMainWindow):
         self.control_layout.addWidget(recording_group)
     
     def init_playback_group(self):
-        """Initialize playback controls group"""
         playback_group = QGroupBox("Playback")
         playback_layout = QVBoxLayout()
         
@@ -441,7 +454,6 @@ class MainWindow(QMainWindow):
         self.control_layout.addWidget(playback_group)
     
     def init_settings_group(self):
-        """Initialize settings group"""
         settings_group = QGroupBox("Settings")
         settings_layout = QVBoxLayout()
         
@@ -473,7 +485,6 @@ class MainWindow(QMainWindow):
         self.control_layout.addWidget(settings_group)
     
     def init_screen_display(self):
-        """Initialize screen display area"""
         display_group = QGroupBox("Device Screen")
         display_layout = QVBoxLayout()
         
@@ -486,10 +497,8 @@ class MainWindow(QMainWindow):
         self.right_splitter.addWidget(display_group)
     
     def init_tabs(self):
-        """Initialize tabs for actions, templates, logs"""
         self.tabs = QTabWidget()
         
-        # Actions tab
         self.actions_tab = QWidget()
         actions_layout = QVBoxLayout()
         
@@ -510,7 +519,6 @@ class MainWindow(QMainWindow):
         actions_layout.addLayout(action_buttons_layout)
         self.actions_tab.setLayout(actions_layout)
         
-        # Templates tab
         self.templates_tab = QWidget()
         templates_layout = QVBoxLayout()
         
@@ -529,7 +537,6 @@ class MainWindow(QMainWindow):
         templates_layout.addLayout(template_buttons_layout)
         self.templates_tab.setLayout(templates_layout)
         
-        # Logs tab
         self.logs_tab = QWidget()
         logs_layout = QVBoxLayout()
         
@@ -544,8 +551,29 @@ class MainWindow(QMainWindow):
         
         logs_layout.addLayout(logs_buttons_layout)
         self.logs_tab.setLayout(logs_layout)
-        
-        # Add tabs
+
+        self.scheduler_tab = QWidget()
+        scheduler_layout = QVBoxLayout()
+
+        self.scheduled_tasks_list = QListWidget()
+        self.scheduled_tasks_list.setContextMenuPolicy(Qt.CustomContextMenu)
+
+        scheduler_layout.addWidget(QLabel("Scheduled Tasks:"))
+        scheduler_layout.addWidget(self.scheduled_tasks_list)
+
+        scheduler_buttons_layout = QHBoxLayout()
+        self.add_scheduled_task_btn = QPushButton("Add Task")
+        self.remove_scheduled_task_btn = QPushButton("Remove Task")
+        self.enable_task_btn = QPushButton("Enable/Disable")
+        scheduler_buttons_layout.addWidget(self.add_scheduled_task_btn)
+        scheduler_buttons_layout.addWidget(self.remove_scheduled_task_btn)
+        scheduler_buttons_layout.addWidget(self.enable_task_btn)
+
+        scheduler_layout.addLayout(scheduler_buttons_layout)
+        self.scheduler_tab.setLayout(scheduler_layout)
+
+        self.tabs.addTab(self.scheduler_tab, "Scheduler")
+
         self.tabs.addTab(self.actions_tab, "Actions")
         self.tabs.addTab(self.templates_tab, "Templates")
         self.tabs.addTab(self.logs_tab, "Logs")
@@ -553,14 +581,12 @@ class MainWindow(QMainWindow):
         self.right_splitter.addWidget(self.tabs)
     
     def init_timers(self):
-        """Initialize timers"""
         # Timer for updating UI
         self.ui_timer = QTimer()
         self.ui_timer.timeout.connect(self.update_ui_state)
         self.ui_timer.start(500)  # Update every 500ms
     
     def connect_signals(self):
-        """Connect signals to slots"""
         # Device connection
         self.refresh_btn.clicked.connect(self.refresh_devices)
         self.connect_btn.clicked.connect(self.connect_device)
@@ -605,9 +631,21 @@ class MainWindow(QMainWindow):
         self.action_player.playback_error.connect(self.log)
         self.action_player.action_started.connect(self.on_action_started)
         self.action_player.action_completed.connect(self.on_action_completed)
-    
+
+        # Conditional action
+        self.add_action_btn.clicked.connect(self.add_action)
+
+        self.add_conditional_btn = QPushButton("Add Conditional")
+        recording_layout.addWidget(self.add_conditional_btn)
+        self.add_conditional_btn.clicked.connect(self.add_conditional_action)
+
+        # Scheduler buttons
+        self.add_scheduled_task_btn.clicked.connect(self.add_scheduled_task)
+        self.remove_scheduled_task_btn.clicked.connect(self.remove_scheduled_task)
+        self.enable_task_btn.clicked.connect(self.toggle_scheduled_task)
+
+
     def refresh_devices(self):
-        """Refresh list of connected devices"""
         self.device_combo.clear()
         devices = self.adb_controller.get_devices()
         self.device_combo.addItems(devices)
@@ -618,7 +656,6 @@ class MainWindow(QMainWindow):
             self.log("No devices found")
     
     def connect_device(self):
-        """Connect to selected device"""
         if not self.device_combo.currentText():
             self.log("No device selected")
             return
@@ -655,9 +692,42 @@ class MainWindow(QMainWindow):
         
         except Exception as e:
             self.log(f"Error connecting to device: {str(e)}")
-    
+
+    def check_drivers(self):
+        driver_status = self.driver_manager.check_drivers()
+
+        if not driver_status['adb']:
+            reply = QMessageBox.question(
+                    self, "ADB Not Found",
+                    "ADB platform tools are not found in the drivers directory. Would you like to download them now?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+            )
+
+            if reply == QMessageBox.Yes:
+                self.log("Downloading ADB platform tools...")
+                success, message = self.driver_manager.download_adb()
+                self.log(message)
+
+                if success:
+                    adb_path = self.driver_manager.get_adb_path()
+                    self.adb_controller.adb_path = adb_path
+                    self.device_manager.adb_path = adb_path
+
+        if not driver_status['scrcpy']:
+            reply = QMessageBox.question(
+                    self, "scrcpy Not Found",
+                    "scrcpy is not found in the drivers directory. Would you like to download it now?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+            )
+
+            if reply == QMessageBox.Yes:
+                self.log("Downloading scrcpy...")
+                success, message = self.driver_manager.download_scrcpy()
+                self.log(message)
+
     def disconnect_device(self):
-        """Disconnect from current device"""
         if self.capture_thread and self.capture_thread.isRunning():
             self.capture_thread.stop()
             self.capture_thread.wait()
@@ -668,7 +738,6 @@ class MainWindow(QMainWindow):
         self.log("Disconnected from device")
     
     def on_frame_update(self, frame):
-        """Handle new frame from capture thread"""
         # Process with OpenCV if enabled
         if self.opencv_check.isChecked():
             frame = self.opencv_processor.process_frame(frame)
@@ -677,7 +746,6 @@ class MainWindow(QMainWindow):
         self.screen_widget.update_frame(frame)
     
     def start_recording(self):
-        """Start recording actions"""
         if not self.is_connected:
             self.log("Cannot start recording: No device connected")
             return
@@ -687,7 +755,6 @@ class MainWindow(QMainWindow):
         self.log("Recording started")
     
     def stop_recording(self):
-        """Stop recording actions"""
         if not self.is_recording:
             return
             
@@ -699,7 +766,6 @@ class MainWindow(QMainWindow):
         self.update_actions_list()
     
     def add_action(self):
-        """Add a custom action"""
         dialog = AddActionDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             action_type = dialog.action_type
@@ -712,7 +778,6 @@ class MainWindow(QMainWindow):
                 self.update_actions_list()
     
     def save_recording(self):
-        """Save recorded actions to file"""
         if not self.action_recorder.actions:
             self.log("No actions to save")
             return
@@ -727,7 +792,6 @@ class MainWindow(QMainWindow):
                 self.log(f"Failed to save actions to {filename}")
     
     def load_recording(self):
-        """Load actions from file"""
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load Actions", "", "JSON Files (*.json)"
         )
@@ -740,7 +804,6 @@ class MainWindow(QMainWindow):
                 self.log(f"Failed to load actions from {filename}")
     
     def play_actions(self):
-        """Play recorded actions"""
         if not self.action_recorder.actions:
             self.log("No actions to play")
             return
@@ -760,13 +823,11 @@ class MainWindow(QMainWindow):
             self.log("Failed to start playback")
     
     def stop_playback(self):
-        """Stop action playback"""
         if self.action_player.stop():
             self.is_playing = False
             self.log("Playback stopped")
     
     def on_screen_tap(self, x, y, device_x, device_y):
-        """Handle tap on screen widget"""
         if self.is_recording:
             # Add tap action to recorder
             self.action_recorder.add_tap(device_x, device_y)
@@ -777,7 +838,6 @@ class MainWindow(QMainWindow):
             self.adb_controller.tap(device_x, device_y)
     
     def on_screen_swipe(self, start_x, start_y, end_x, end_y, device_start_x, device_start_y, device_end_x, device_end_y, duration):
-        """Handle swipe on screen widget"""
         if self.is_recording:
             # Add swipe action to recorder
             self.action_recorder.add_swipe(device_start_x, device_start_y, device_end_x, device_end_y, duration)
@@ -788,7 +848,6 @@ class MainWindow(QMainWindow):
             self.adb_controller.swipe(device_start_x, device_start_y, device_end_x, device_end_y, duration)
     
     def on_screen_long_press(self, x, y, device_x, device_y, duration):
-        """Handle long press on screen widget"""
         if self.is_recording:
             # Add long press action to recorder
             self.action_recorder.add_long_press(device_x, device_y, duration)
@@ -799,8 +858,6 @@ class MainWindow(QMainWindow):
             self.adb_controller.long_press(device_x, device_y, duration)
     
     def on_action_started(self, index, action):
-        """Handle action playback start"""
-        # Highlight the action in the list
         if 0 <= index < self.actions_list.count():
             self.actions_list.setCurrentRow(index)
             
@@ -809,11 +866,9 @@ class MainWindow(QMainWindow):
             self.log(f"Executing: {self.action_recorder.get_action_description(action)}")
     
     def on_action_completed(self, index):
-        """Handle action playback completion"""
         pass
     
     def update_actions_list(self):
-        """Update the actions list widget"""
         self.actions_list.clear()
         
         for action in self.action_recorder.actions:
@@ -821,7 +876,6 @@ class MainWindow(QMainWindow):
             self.actions_list.addItem(description)
     
     def clear_actions(self):
-        """Clear all recorded actions"""
         if not self.action_recorder.actions:
             return
             
@@ -838,7 +892,6 @@ class MainWindow(QMainWindow):
             self.log("All actions cleared")
     
     def edit_selected_action(self):
-        """Edit the selected action"""
         selected_items = self.actions_list.selectedItems()
         if not selected_items:
             self.log("No action selected")
@@ -923,7 +976,6 @@ class MainWindow(QMainWindow):
             self.log(f"Action {selected_index} updated")
     
     def remove_selected_action(self):
-        """Remove the selected action"""
         selected_items = self.actions_list.selectedItems()
         if not selected_items:
             self.log("No action selected")
@@ -935,7 +987,6 @@ class MainWindow(QMainWindow):
             self.log(f"Removed action at index {selected_index}")
     
     def show_actions_context_menu(self, position):
-        """Show context menu for actions list"""
         menu = QMenu()
         
         edit_action = QAction("Edit", self)
@@ -951,22 +1002,18 @@ class MainWindow(QMainWindow):
             menu.exec_(self.actions_list.mapToGlobal(position))
     
     def create_template(self):
-        """Create a new template from screen selection"""
         if not self.is_connected or self.screen_widget.selected_region is None:
             self.log("Select a region on the screen first")
             return
-        
-        # Get selected region
+
         region = self.screen_widget.selected_region
         device_region = self.screen_widget.get_device_coordinates_rect(region)
         
-        # Prompt for template name
         template_name, ok = QFileDialog.getSaveFileName(
             self, "Save Template", self.templates_dir, "PNG Files (*.png)"
         )
         
         if ok and template_name:
-            # Create the template
             if self.opencv_processor.create_template(device_region, template_name):
                 self.log(f"Template created: {os.path.basename(template_name)}")
                 self.refresh_templates()
@@ -974,7 +1021,6 @@ class MainWindow(QMainWindow):
                 self.log("Failed to create template")
     
     def remove_template(self):
-        """Remove selected template"""
         selected_items = self.templates_list.selectedItems()
         if not selected_items:
             self.log("No template selected")
@@ -994,7 +1040,6 @@ class MainWindow(QMainWindow):
             self.log(f"Error removing template: {str(e)}")
     
     def refresh_templates(self):
-        """Refresh templates list"""
         self.templates_list.clear()
         
         if os.path.exists(self.templates_dir):
@@ -1003,7 +1048,6 @@ class MainWindow(QMainWindow):
                 self.templates_list.addItem(template)
     
     def show_templates_context_menu(self, position):
-        """Show context menu for templates list"""
         menu = QMenu()
         
         remove_action = QAction("Remove", self)
@@ -1019,7 +1063,6 @@ class MainWindow(QMainWindow):
             menu.exec_(self.templates_list.mapToGlobal(position))
     
     def use_template_in_action(self):
-        """Add a template matching action using the selected template"""
         selected_items = self.templates_list.selectedItems()
         if not selected_items:
             self.log("No template selected")
@@ -1029,57 +1072,46 @@ class MainWindow(QMainWindow):
         template_path = os.path.join(self.templates_dir, template_name)
         
         if os.path.exists(template_path):
-            # Create a dialog to configure the template action
             dialog = AddActionDialog(self)
             
-            # Find and select the template_match radio button
             for button in dialog.action_group.buttons():
                 if button.text().lower() == ActionType.TEMPLATE_MATCH.value:
                     button.setChecked(True)
                     dialog.on_action_type_changed(button)
                     break
             
-            # Set the template path
             dialog.template_path_edit.setText(template_path)
             
             if dialog.exec_() == QDialog.Accepted:
                 action_type = dialog.action_type
                 action_data = dialog.action_data
                 
-                # Add action to recorder
                 action_index = self.action_recorder.add_action(action_type, action_data)
                 if action_index >= 0:
                     self.log(f"Added template action: {template_name}")
                     self.update_actions_list()
     
     def clear_logs(self):
-        """Clear the logs list"""
         self.logs_list.clear()
     
     def log(self, message):
-        """Add a message to the logs"""
         if isinstance(message, str):
             timestamp = time.strftime("%H:%M:%S")
             self.logs_list.addItem(f"[{timestamp}] {message}")
             self.logs_list.scrollToBottom()
             
-            # Also write to logger
             self.logger.log(message)
     
     def apply_theme(self, theme_name):
-        """Apply the selected theme"""
         self.theme_manager.apply_theme(self, theme_name)
     
     def toggle_opencv(self, state):
-        """Toggle OpenCV processing"""
         enabled = state == Qt.Checked
         self.screen_widget.set_opencv_enabled(enabled)
     
     def load_config(self):
-        """Load application configuration"""
         config = self.config_manager.load_config()
         
-        # Apply configuration
         if config:
             if 'theme' in config and config['theme'] in ["Light", "Dark", "System"]:
                 self.theme_combo.setCurrentText(config['theme'])
@@ -1096,7 +1128,6 @@ class MainWindow(QMainWindow):
             self.refresh_templates()
     
     def save_config(self):
-        """Save application configuration"""
         config = {
             'theme': self.theme_combo.currentText(),
             'capture_interval': self.interval_spin.value(),
@@ -1107,23 +1138,18 @@ class MainWindow(QMainWindow):
         self.config_manager.save_config(config)
     
     def update_ui_state(self):
-        """Update UI based on current state"""
-        # Connection state
         connected = self.is_connected
         self.connect_btn.setText("Disconnect" if connected else "Connect")
         
-        # Recording state
         recording = self.is_recording
         self.record_btn.setEnabled(connected and not recording and not self.is_playing)
         self.stop_record_btn.setEnabled(connected and recording)
         self.add_action_btn.setEnabled(not recording and not self.is_playing)
         
-        # Playback state
         playing = self.is_playing
         self.play_btn.setEnabled(connected and not recording and not playing and len(self.action_recorder.actions) > 0)
         self.stop_play_btn.setEnabled(connected and playing)
         
-        # Action editing
         has_actions = len(self.action_recorder.actions) > 0
         self.save_recording_btn.setEnabled(has_actions and not recording and not playing)
         self.load_recording_btn.setEnabled(not recording and not playing)
@@ -1133,7 +1159,6 @@ class MainWindow(QMainWindow):
         self.edit_action_btn.setEnabled(has_selection and not recording and not playing)
         self.remove_action_btn.setEnabled(has_selection and not recording and not playing)
         
-        # Template management
         has_region = self.screen_widget.selected_region is not None
         self.create_template_btn.setEnabled(connected and has_region)
         
@@ -1141,18 +1166,629 @@ class MainWindow(QMainWindow):
         self.remove_template_btn.setEnabled(has_template)
     
     def closeEvent(self, event):
-        """Handle window close event"""
-        # Stop any running threads
         if self.capture_thread and self.capture_thread.isRunning():
             self.capture_thread.stop()
             self.capture_thread.wait()
         
-        # Stop playback
         if self.is_playing:
             self.action_player.stop()
         
-        # Save configuration
         self.save_config()
         
-        # Accept the event
         event.accept()
+
+    def update_scheduled_tasks_list(self):
+        self.scheduled_tasks_list.clear()
+
+        for task in self.task_scheduler.get_tasks():
+            name = task.get('name', 'Unnamed')
+            schedule_type = task.get('schedule_type', '')
+            enabled = task.get('enabled', False)
+
+            display = f"{'✓' if enabled else '✗'} {name} ({schedule_type})"
+
+            item = QListWidgetItem(display)
+            item.setData(Qt.UserRole, task)
+
+            if not enabled:
+                item.setForeground(QColor(150, 150, 150))
+
+            self.scheduled_tasks_list.addItem(item)
+
+    def add_scheduled_task(self):
+        if not self.action_recorder.actions:
+            self.log("No actions to schedule")
+            return
+
+        dialog = ScheduleTaskDialog(self, self.action_recorder.actions)
+        if dialog.exec_() == QDialog.Accepted:
+            task_data = dialog.task_data
+
+            self.task_scheduler.add_task(
+                    task_data['name'],
+                    self.action_recorder.actions,
+                    task_data['schedule_type'],
+                    task_data['schedule_data'],
+                    task_data['enabled'],
+                    task_data['speed_factor']
+            )
+
+            self.update_scheduled_tasks_list()
+            self.log(f"Added scheduled task: {task_data['name']}")
+
+    def remove_scheduled_task(self):
+        selected_items = self.scheduled_tasks_list.selectedItems()
+        if not selected_items:
+            self.log("No task selected")
+            return
+
+        selected_index = self.scheduled_tasks_list.row(selected_items[0])
+        if self.task_scheduler.remove_task(selected_index):
+            self.update_scheduled_tasks_list()
+            self.log("Task removed")
+        else:
+            self.log("Failed to remove task")
+
+    def toggle_scheduled_task(self):
+        selected_items = self.scheduled_tasks_list.selectedItems()
+        if not selected_items:
+            self.log("No task selected")
+            return
+
+        selected_index = self.scheduled_tasks_list.row(selected_items[0])
+        tasks = self.task_scheduler.get_tasks()
+
+        if 0 <= selected_index < len(tasks):
+            task = tasks[selected_index]
+            task['enabled'] = not task.get('enabled', False)
+
+            self.task_scheduler.update_task(selected_index, task)
+            self.update_scheduled_tasks_list()
+            self.log(f"Task {task['name']} {'enabled' if task['enabled'] else 'disabled'}")
+
+    def add_conditional_action(self):
+        if not self.is_connected:
+            self.log("Cannot add conditional: No device connected")
+            return
+
+        dialog = AddConditionalActionDialog(self, self.action_recorder, self.opencv_processor)
+        if dialog.exec_() == QDialog.Accepted:
+            condition = dialog.condition
+            then_actions = dialog.then_actions
+            else_actions = dialog.else_actions
+
+            self.action_recorder.add_conditional_action(condition, then_actions, else_actions)
+            self.update_actions_list()
+            self.log(f"Added conditional action with {len(then_actions)} 'then' actions and {len(else_actions)} 'else' actions")
+
+class ScheduleTaskDialog(QDialog):
+
+    def __init__(self, parent=None, actions=None):
+        super().__init__(parent)
+        self.setWindowTitle("Schedule Task")
+        self.resize(500, 400)
+
+        self.actions = actions or []
+        self.task_data = {}
+
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Task Name:"))
+        self.name_edit = QLineEdit()
+        name_layout.addWidget(self.name_edit)
+
+        type_group = QGroupBox("Schedule Type")
+        type_layout = QVBoxLayout()
+
+        self.type_group = QButtonGroup(self)
+
+        self.one_time_radio = QRadioButton("One Time")
+        self.type_group.addButton(self.one_time_radio)
+        type_layout.addWidget(self.one_time_radio)
+
+        self.daily_radio = QRadioButton("Daily")
+        self.type_group.addButton(self.daily_radio)
+        type_layout.addWidget(self.daily_radio)
+
+        self.weekly_radio = QRadioButton("Weekly")
+        self.type_group.addButton(self.weekly_radio)
+        type_layout.addWidget(self.weekly_radio)
+
+        self.interval_radio = QRadioButton("Interval")
+        self.type_group.addButton(self.interval_radio)
+        type_layout.addWidget(self.interval_radio)
+
+        self.one_time_radio.setChecked(True)
+
+        type_group.setLayout(type_layout)
+
+        self.params_group = QGroupBox("Schedule Parameters")
+        self.params_layout = QVBoxLayout()
+        self.params_group.setLayout(self.params_layout)
+
+        self.setup_one_time_params()
+
+        self.type_group.buttonClicked.connect(self.on_schedule_type_changed)
+
+        self.enabled_check = QCheckBox("Enable Schedule")
+        self.enabled_check.setChecked(True)
+
+        speed_layout = QHBoxLayout()
+        speed_layout.addWidget(QLabel("Speed:"))
+        self.speed_spin = QSpinBox()
+        self.speed_spin.setRange(10, 500)
+        self.speed_spin.setValue(100)
+        self.speed_spin.setSuffix("%")
+        speed_layout.addWidget(self.speed_spin)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+
+        layout.addLayout(name_layout)
+        layout.addWidget(type_group)
+        layout.addWidget(self.params_group)
+        layout.addWidget(self.enabled_check)
+        layout.addLayout(speed_layout)
+        layout.addWidget(button_box)
+
+        self.setLayout(layout)
+
+    def on_schedule_type_changed(self, button):
+        self.clear_params_layout()
+
+        if button == self.one_time_radio:
+            self.setup_one_time_params()
+        elif button == self.daily_radio:
+            self.setup_daily_params()
+        elif button == self.weekly_radio:
+            self.setup_weekly_params()
+        elif button == self.interval_radio:
+            self.setup_interval_params()
+
+    def clear_params_layout(self):
+        while self.params_layout.count():
+            item = self.params_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def setup_one_time_params(self):
+        self.datetime_edit = QDateTimeEdit()
+        self.datetime_edit.setDateTime(QDateTime.currentDateTime().addSecs(3600))
+        self.datetime_edit.setCalendarPopup(True)
+
+        self.params_layout.addWidget(QLabel("Date and Time:"))
+        self.params_layout.addWidget(self.datetime_edit)
+
+    def setup_daily_params(self):
+        self.time_edit = QTimeEdit()
+        self.time_edit.setTime(QTime.currentTime().addSecs(3600))
+
+        self.params_layout.addWidget(QLabel("Time:"))
+        self.params_layout.addWidget(self.time_edit)
+
+    def setup_weekly_params(self):
+        self.days_layout = QVBoxLayout()
+
+        self.days_checks = {}
+        for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+            check = QCheckBox(day.capitalize())
+            self.days_checks[day] = check
+            self.days_layout.addWidget(check)
+
+        self.weekly_time_edit = QTimeEdit()
+        self.weekly_time_edit.setTime(QTime.currentTime().addSecs(3600))
+
+        self.params_layout.addWidget(QLabel("Days:"))
+        self.params_layout.addLayout(self.days_layout)
+        self.params_layout.addWidget(QLabel("Time:"))
+        self.params_layout.addWidget(self.weekly_time_edit)
+
+    def setup_interval_params(self):
+        hours_layout = QHBoxLayout()
+        hours_layout.addWidget(QLabel("Hours:"))
+        self.hours_spin = QSpinBox()
+        self.hours_spin.setRange(0, 999)
+        self.hours_spin.setValue(1)
+        hours_layout.addWidget(self.hours_spin)
+
+        minutes_layout = QHBoxLayout()
+        minutes_layout.addWidget(QLabel("Minutes:"))
+        self.minutes_spin = QSpinBox()
+        self.minutes_spin.setRange(0, 59)
+        self.minutes_spin.setValue(0)
+        minutes_layout.addWidget(self.minutes_spin)
+
+        self.params_layout.addLayout(hours_layout)
+        self.params_layout.addLayout(minutes_layout)
+
+    def get_schedule_data(self):
+        if self.one_time_radio.isChecked():
+            return ScheduleType.ONE_TIME, {
+                    'datetime': self.datetime_edit.dateTime().toString(Qt.ISODate)
+            }
+
+        elif self.daily_radio.isChecked():
+            return ScheduleType.DAILY, {
+                    'time': self.time_edit.time().toString('HH:mm')
+            }
+
+        elif self.weekly_radio.isChecked():
+            selected_days = []
+            for day, check in self.days_checks.items():
+                if check.isChecked():
+                    selected_days.append(day)
+
+            return ScheduleType.WEEKLY, {
+                    'days': selected_days,
+                    'time': self.weekly_time_edit.time().toString('HH:mm')
+            }
+
+        elif self.interval_radio.isChecked():
+            return ScheduleType.INTERVAL, {
+                    'hours':   self.hours_spin.value(),
+                    'minutes': self.minutes_spin.value()
+            }
+
+        return None, {}
+
+    def accept(self):
+        name = self.name_edit.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Invalid Input", "Please enter a task name.")
+            return
+
+        schedule_type, schedule_data = self.get_schedule_data()
+
+        if schedule_type == ScheduleType.WEEKLY and not any(self.days_checks.values()):
+            QMessageBox.warning(self, "Invalid Input", "Please select at least one day of the week.")
+            return
+
+        if schedule_type == ScheduleType.INTERVAL and self.hours_spin.value() == 0 and self.minutes_spin.value() == 0:
+            QMessageBox.warning(self, "Invalid Input", "Please set a non-zero interval.")
+            return
+
+        self.task_data = {
+                'name':          name,
+                'schedule_type': schedule_type,
+                'schedule_data': schedule_data,
+                'enabled':       self.enabled_check.isChecked(),
+                'speed_factor':  self.speed_spin.value() / 100.0
+        }
+
+        super().accept()
+
+class AddConditionalActionDialog(QDialog):
+
+    def __init__(self, parent=None, action_recorder=None, opencv_processor=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Conditional Action")
+        self.resize(600, 500)
+
+        self.action_recorder = action_recorder
+        self.opencv_processor = opencv_processor
+
+        self.condition = {}
+        self.then_actions = []
+        self.else_actions = []
+
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        condition_group = QGroupBox("Condition")
+        condition_layout = QVBoxLayout()
+
+        condition_type_layout = QHBoxLayout()
+        condition_type_layout.addWidget(QLabel("Type:"))
+
+        self.condition_combo = QComboBox()
+        for cond_type in ConditionType:
+            self.condition_combo.addItem(cond_type.value.replace('_', ' ').title(), cond_type.value)
+
+        condition_type_layout.addWidget(self.condition_combo)
+        condition_layout.addLayout(condition_type_layout)
+
+        self.condition_params_layout = QVBoxLayout()
+        condition_layout.addLayout(self.condition_params_layout)
+
+        condition_group.setLayout(condition_layout)
+
+        then_group = QGroupBox("Then Actions")
+        then_layout = QVBoxLayout()
+
+        self.then_list = QListWidget()
+        then_buttons_layout = QHBoxLayout()
+        self.add_then_btn = QPushButton("Add Action")
+        self.remove_then_btn = QPushButton("Remove")
+        then_buttons_layout.addWidget(self.add_then_btn)
+        then_buttons_layout.addWidget(self.remove_then_btn)
+
+        then_layout.addWidget(self.then_list)
+        then_layout.addLayout(then_buttons_layout)
+        then_group.setLayout(then_layout)
+
+        else_group = QGroupBox("Else Actions")
+        else_layout = QVBoxLayout()
+
+        self.else_list = QListWidget()
+        else_buttons_layout = QHBoxLayout()
+        self.add_else_btn = QPushButton("Add Action")
+        self.remove_else_btn = QPushButton("Remove")
+        else_buttons_layout.addWidget(self.add_else_btn)
+        else_buttons_layout.addWidget(self.remove_else_btn)
+
+        else_layout.addWidget(self.else_list)
+        else_layout.addLayout(else_buttons_layout)
+        else_group.setLayout(else_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+
+        layout.addWidget(condition_group)
+        layout.addWidget(then_group)
+        layout.addWidget(else_group)
+        layout.addWidget(button_box)
+
+        self.setLayout(layout)
+
+        self.condition_combo.currentIndexChanged.connect(self.update_condition_params)
+        self.add_then_btn.clicked.connect(lambda: self.add_action(True))
+        self.remove_then_btn.clicked.connect(lambda: self.remove_action(True))
+        self.add_else_btn.clicked.connect(lambda: self.add_action(False))
+        self.remove_else_btn.clicked.connect(lambda: self.remove_action(False))
+
+        self.update_condition_params(0)
+
+    def update_condition_params(self, index):
+        self.clear_condition_params()
+
+        condition_type = self.condition_combo.currentData()
+
+        if condition_type == ConditionType.TEMPLATE_PRESENT.value or condition_type == ConditionType.TEMPLATE_ABSENT.value:
+            self.setup_template_condition_params()
+
+        elif condition_type == ConditionType.COLOR_PRESENT.value:
+            self.setup_color_condition_params()
+
+        elif condition_type == ConditionType.PIXEL_COLOR.value:
+            self.setup_pixel_condition_params()
+
+    def clear_condition_params(self):
+        while self.condition_params_layout.count():
+            item = self.condition_params_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+            else:
+                layout = item.layout()
+                if layout:
+                    while layout.count():
+                        sub_item = layout.takeAt(0)
+                        sub_widget = sub_item.widget()
+                        if sub_widget:
+                            sub_widget.deleteLater()
+
+    def setup_template_condition_params(self):
+        path_layout = QHBoxLayout()
+        self.template_path_edit = QLineEdit()
+        self.template_path_edit.setReadOnly(True)
+
+        self.browse_template_btn = QPushButton("Browse...")
+        self.browse_template_btn.clicked.connect(self.browse_template)
+
+        path_layout.addWidget(self.template_path_edit)
+        path_layout.addWidget(self.browse_template_btn)
+
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(QLabel("Threshold:"))
+
+        self.threshold_spin = QDoubleSpinBox()
+        self.threshold_spin.setRange(0.1, 1.0)
+        self.threshold_spin.setValue(0.8)
+        self.threshold_spin.setSingleStep(0.05)
+
+        threshold_layout.addWidget(self.threshold_spin)
+
+        self.condition_params_layout.addWidget(QLabel("Template Image:"))
+        self.condition_params_layout.addLayout(path_layout)
+        self.condition_params_layout.addLayout(threshold_layout)
+
+    def setup_color_condition_params(self):
+        hsv_min_layout = QHBoxLayout()
+        hsv_min_layout.addWidget(QLabel("Min HSV:"))
+
+        self.h_min_spin = QSpinBox()
+        self.h_min_spin.setRange(0, 179)
+        self.s_min_spin = QSpinBox()
+        self.s_min_spin.setRange(0, 255)
+        self.v_min_spin = QSpinBox()
+        self.v_min_spin.setRange(0, 255)
+
+        hsv_min_layout.addWidget(QLabel("H:"))
+        hsv_min_layout.addWidget(self.h_min_spin)
+        hsv_min_layout.addWidget(QLabel("S:"))
+        hsv_min_layout.addWidget(self.s_min_spin)
+        hsv_min_layout.addWidget(QLabel("V:"))
+        hsv_min_layout.addWidget(self.v_min_spin)
+
+        hsv_max_layout = QHBoxLayout()
+        hsv_max_layout.addWidget(QLabel("Max HSV:"))
+
+        self.h_max_spin = QSpinBox()
+        self.h_max_spin.setRange(0, 179)
+        self.h_max_spin.setValue(179)
+        self.s_max_spin = QSpinBox()
+        self.s_max_spin.setRange(0, 255)
+        self.s_max_spin.setValue(255)
+        self.v_max_spin = QSpinBox()
+        self.v_max_spin.setRange(0, 255)
+        self.v_max_spin.setValue(255)
+
+        hsv_max_layout.addWidget(QLabel("H:"))
+        hsv_max_layout.addWidget(self.h_max_spin)
+        hsv_max_layout.addWidget(QLabel("S:"))
+        hsv_max_layout.addWidget(self.s_max_spin)
+        hsv_max_layout.addWidget(QLabel("V:"))
+        hsv_max_layout.addWidget(self.v_max_spin)
+
+        area_layout = QHBoxLayout()
+        area_layout.addWidget(QLabel("Min Area:"))
+
+        self.min_area_spin = QSpinBox()
+        self.min_area_spin.setRange(10, 100000)
+        self.min_area_spin.setValue(100)
+
+        area_layout.addWidget(self.min_area_spin)
+
+        self.condition_params_layout.addLayout(hsv_min_layout)
+        self.condition_params_layout.addLayout(hsv_max_layout)
+        self.condition_params_layout.addLayout(area_layout)
+
+    def setup_pixel_condition_params(self):
+        coords_layout = QHBoxLayout()
+        coords_layout.addWidget(QLabel("X:"))
+
+        self.pixel_x_spin = QSpinBox()
+        self.pixel_x_spin.setRange(0, 9999)
+
+        coords_layout.addWidget(self.pixel_x_spin)
+        coords_layout.addWidget(QLabel("Y:"))
+
+        self.pixel_y_spin = QSpinBox()
+        self.pixel_y_spin.setRange(0, 9999)
+
+        coords_layout.addWidget(self.pixel_y_spin)
+
+        color_layout = QHBoxLayout()
+        color_layout.addWidget(QLabel("Color (BGR):"))
+
+        self.b_spin = QSpinBox()
+        self.b_spin.setRange(0, 255)
+        self.g_spin = QSpinBox()
+        self.g_spin.setRange(0, 255)
+        self.r_spin = QSpinBox()
+        self.r_spin.setRange(0, 255)
+
+        color_layout.addWidget(QLabel("B:"))
+        color_layout.addWidget(self.b_spin)
+        color_layout.addWidget(QLabel("G:"))
+        color_layout.addWidget(self.g_spin)
+        color_layout.addWidget(QLabel("R:"))
+        color_layout.addWidget(self.r_spin)
+
+        # Tolerance
+        tolerance_layout = QHBoxLayout()
+        tolerance_layout.addWidget(QLabel("Tolerance:"))
+
+        self.tolerance_spin = QSpinBox()
+        self.tolerance_spin.setRange(0, 128)
+        self.tolerance_spin.setValue(10)
+
+        tolerance_layout.addWidget(self.tolerance_spin)
+
+        self.condition_params_layout.addLayout(coords_layout)
+        self.condition_params_layout.addLayout(color_layout)
+        self.condition_params_layout.addLayout(tolerance_layout)
+
+    def browse_template(self):
+        filename, _ = QFileDialog.getOpenFileName(
+                self, "Select Template Image", "", "Images (*.png *.jpg *.jpeg)"
+        )
+        if filename:
+            self.template_path_edit.setText(filename)
+
+    def add_action(self, is_then_branch):
+        dialog = AddActionDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            action_type = dialog.action_type
+            action_data = dialog.action_data
+
+            action = {
+                    'type':        action_type.value,
+                    'data':        action_data,
+                    'timestamp':   time.time(),
+                    'time_offset': 0
+            }
+
+            if is_then_branch:
+                self.then_actions.append(action)
+                self.then_list.addItem(self.action_recorder.get_action_description(action))
+            else:
+                self.else_actions.append(action)
+                self.else_list.addItem(self.action_recorder.get_action_description(action))
+
+    def remove_action(self, is_then_branch):
+        list_widget = self.then_list if is_then_branch else self.else_list
+        actions_list = self.then_actions if is_then_branch else self.else_actions
+
+        selected_items = list_widget.selectedItems()
+        if not selected_items:
+            return
+
+        selected_index = list_widget.row(selected_items[0])
+        if 0 <= selected_index < len(actions_list):
+            actions_list.pop(selected_index)
+            list_widget.takeItem(selected_index)
+
+    def get_condition_data(self):
+        condition_type = self.condition_combo.currentData()
+
+        if condition_type == ConditionType.TEMPLATE_PRESENT.value or condition_type == ConditionType.TEMPLATE_ABSENT.value:
+            template_path = self.template_path_edit.text()
+            if not template_path:
+                return None
+
+            return {
+                    'type': condition_type,
+                    'data': {
+                            'template_path': template_path,
+                            'threshold':     self.threshold_spin.value()
+                    }
+            }
+
+        elif condition_type == ConditionType.COLOR_PRESENT.value:
+            return {
+                    'type': condition_type,
+                    'data': {
+                            'color_range': [
+                                    [self.h_min_spin.value(), self.s_min_spin.value(), self.v_min_spin.value()],
+                                    [self.h_max_spin.value(), self.s_max_spin.value(), self.v_max_spin.value()]
+                            ],
+                            'min_area':    self.min_area_spin.value()
+                    }
+            }
+
+        elif condition_type == ConditionType.PIXEL_COLOR.value:
+            return {
+                    'type': condition_type,
+                    'data': {
+                            'x':         self.pixel_x_spin.value(),
+                            'y':         self.pixel_y_spin.value(),
+                            'color':     [self.b_spin.value(), self.g_spin.value(), self.r_spin.value()],
+                            'tolerance': self.tolerance_spin.value()
+                    }
+            }
+
+        return None
+
+    def accept(self):
+        condition = self.get_condition_data()
+        if condition is None:
+            QMessageBox.warning(self, "Invalid Condition", "Please fill all required condition fields.")
+            return
+
+        if not self.then_actions:
+            QMessageBox.warning(self, "Missing Actions", "Please add at least one action to the 'Then' branch.")
+            return
+
+        self.condition = condition
+
+        super().accept()

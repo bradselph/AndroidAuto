@@ -6,8 +6,7 @@ import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 
 class AdbController(QObject):
-    """Controller for ADB operations with Android devices"""
-    
+
     def __init__(self, device_id=None):
         super().__init__()
         self.device_id = device_id
@@ -16,13 +15,10 @@ class AdbController(QObject):
         self.screenshot_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "temp_screenshot.png")
     
     def _find_adb_path(self):
-        """Attempt to find ADB in common locations or PATH"""
-        # Check if adb is in PATH
         try:
             subprocess.run(['adb', '--version'], capture_output=True, check=False)
             return 'adb'
         except (FileNotFoundError, subprocess.SubprocessError):
-            # Check common installation locations
             common_paths = [
                 os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
                 os.path.join(os.environ.get('PROGRAMFILES', ''), 'Android', 'android-sdk', 'platform-tools', 'adb.exe'),
@@ -33,11 +29,9 @@ class AdbController(QObject):
                 if os.path.exists(path):
                     return path
             
-            # Default to 'adb' and hope for the best
             return 'adb'
     
     def get_devices(self):
-        """Get list of connected devices"""
         result = subprocess.run([self.adb_path, 'devices'], capture_output=True, text=True, check=False)
         lines = result.stdout.strip().split('\n')[1:]
         devices = []
@@ -47,7 +41,6 @@ class AdbController(QObject):
         return devices
     
     def is_device_connected(self, device_id=None):
-        """Check if specific device is connected"""
         device_to_check = device_id or self.device_id
         if not device_to_check:
             return False
@@ -56,7 +49,6 @@ class AdbController(QObject):
         return device_to_check in devices
     
     def start_scrcpy(self, output_file=None, no_display=False):
-        """Start scrcpy for screen mirroring"""
         cmd = ['scrcpy']
         if self.device_id:
             cmd.extend(['-s', self.device_id])
@@ -73,7 +65,6 @@ class AdbController(QObject):
             return False
     
     def stop_scrcpy(self):
-        """Stop scrcpy process"""
         if self.scrcpy_process:
             self.scrcpy_process.terminate()
             try:
@@ -83,7 +74,6 @@ class AdbController(QObject):
             self.scrcpy_process = None
     
     def adb_command(self, command, shell=False):
-        """Run generic ADB command"""
         cmd = [self.adb_path]
         if self.device_id:
             cmd.extend(['-s', self.device_id])
@@ -104,50 +94,37 @@ class AdbController(QObject):
             return None
     
     def tap(self, x, y):
-        """Tap at coordinates"""
         return self.adb_command(['input', 'tap', str(int(x)), str(int(y))], shell=True)
     
     def swipe(self, x1, y1, x2, y2, duration=300):
-        """Swipe from (x1,y1) to (x2,y2)"""
         return self.adb_command(
             ['input', 'swipe', str(int(x1)), str(int(y1)), str(int(x2)), str(int(y2)), str(duration)],
             shell=True
         )
     
     def long_press(self, x, y, duration=500):
-        """Long press at coordinates"""
-        # Simulate long press with a swipe that doesn't move
         return self.swipe(x, y, x, y, duration)
     
     def key_event(self, keycode):
-        """Send key event"""
         return self.adb_command(['input', 'keyevent', str(keycode)], shell=True)
     
     def text_input(self, text):
-        """Input text"""
-        # Replace spaces with %s for ADB
         safe_text = text.replace(' ', '%s').replace("'", "\\'").replace('"', '\\"')
         return self.adb_command(['input', 'text', safe_text], shell=True)
     
     def take_screenshot(self):
-        """Capture screenshot and return as OpenCV image"""
-        # Delete previous screenshot if it exists
         if os.path.exists(self.screenshot_path):
             try:
                 os.remove(self.screenshot_path)
             except OSError:
                 pass
                 
-        # Capture screenshot on device
         self.adb_command(['screencap', '-p', '/sdcard/screenshot.png'], shell=True)
         
-        # Pull screenshot to computer
         self.adb_command(['pull', '/sdcard/screenshot.png', self.screenshot_path])
         
-        # Delete screenshot from device
         self.adb_command(['rm', '/sdcard/screenshot.png'], shell=True)
         
-        # Check if screenshot was pulled successfully
         if os.path.exists(self.screenshot_path):
             try:
                 return cv2.imread(self.screenshot_path)
@@ -157,10 +134,8 @@ class AdbController(QObject):
         return None
     
     def get_device_dimensions(self):
-        """Get device screen dimensions"""
         output = self.adb_command(['wm', 'size'], shell=True)
         if output:
-            # Parse output like "Physical size: 1080x2340"
             try:
                 dimensions = output.split(': ')[1].split('x')
                 width = int(dimensions[0])
@@ -171,7 +146,6 @@ class AdbController(QObject):
         return None, None
     
     def restart_adb_server(self):
-        """Restart ADB server"""
         subprocess.run([self.adb_path, 'kill-server'], check=False)
         time.sleep(1)
         subprocess.run([self.adb_path, 'start-server'], check=False)
@@ -180,7 +154,6 @@ class AdbController(QObject):
 
 
 class ScreenCaptureThread(QThread):
-    """Thread for continuous screen capture"""
     update_frame = pyqtSignal(np.ndarray)
     error = pyqtSignal(str)
     
@@ -209,9 +182,61 @@ class ScreenCaptureThread(QThread):
                 self.error.emit(f"Error in screen capture: {str(e)}")
                 failures += 1
             
-            # Sleep between captures
             time.sleep(self.interval)
     
     def stop(self):
         self.running = False
         self.wait()
+
+class DeviceManager:
+
+    def __init__(self, driver_manager=None):
+        self.driver_manager = driver_manager
+        self.adb_path = driver_manager.get_adb_path() if driver_manager else 'adb'
+        self.devices = {}
+
+    def refresh_devices(self):
+        result = subprocess.run([self.adb_path, 'devices'], capture_output=True, text=True, check=False)
+
+        if result.returncode != 0:
+            return []
+
+        lines = result.stdout.strip().split('\n')[1:]
+
+        device_ids = []
+        for line in lines:
+            if line and "\tdevice" in line:
+                device_id = line.split('\t')[0]
+                device_ids.append(device_id)
+
+                if device_id not in self.devices:
+                    self.devices[device_id] = AdbController(device_id, self.adb_path)
+
+        disconnected = [d for d in self.devices.keys() if d not in device_ids]
+        for device_id in disconnected:
+            del self.devices[device_id]
+
+        return device_ids
+
+    def get_device(self, device_id):
+        if device_id in self.devices:
+            return self.devices[device_id]
+
+        if self.is_device_connected(device_id):
+            self.devices[device_id] = AdbController(device_id, self.adb_path)
+            return self.devices[device_id]
+
+        return None
+
+    def is_device_connected(self, device_id):
+        device_ids = self.refresh_devices()
+        return device_id in device_ids
+
+    def restart_adb_server(self):
+        subprocess.run([self.adb_path, 'kill-server'], check=False)
+        time.sleep(1)
+        subprocess.run([self.adb_path, 'start-server'], check=False)
+        time.sleep(2)
+
+        self.refresh_devices()
+        return True

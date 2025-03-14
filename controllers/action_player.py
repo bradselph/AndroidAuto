@@ -3,10 +3,10 @@ import os
 import threading
 from PyQt5.QtCore import QObject, pyqtSignal
 from controllers.action_recorder import ActionType
+from controllers.condition_checker import ConditionChecker, ConditionType
 
 class ActionPlayer(QObject):
-    """Plays back recorded actions on the device"""
-    
+
     action_started = pyqtSignal(int, dict)  # Index, action data
     action_completed = pyqtSignal(int)  # Index
     playback_started = pyqtSignal()
@@ -17,6 +17,7 @@ class ActionPlayer(QObject):
         super().__init__()
         self.adb_controller = adb_controller
         self.opencv_processor = opencv_processor
+        self.condition_checker = ConditionChecker(opencv_processor) if opencv_processor else None
         self.actions = []
         self.playing = False
         self.current_index = -1
@@ -24,11 +25,9 @@ class ActionPlayer(QObject):
         self.stop_event = threading.Event()
     
     def load_actions(self, actions):
-        """Load actions to be played"""
         self.actions = actions
     
     def play(self, speed_factor=1.0, start_index=0):
-        """Play actions with speed adjustment"""
         if not self.actions or self.playing or start_index >= len(self.actions):
             return False
         
@@ -45,7 +44,6 @@ class ActionPlayer(QObject):
         return True
     
     def _play_thread(self, speed_factor, start_index):
-        """Thread function for action playback"""
         self.playing = True
         self.playback_started.emit()
         
@@ -90,7 +88,6 @@ class ActionPlayer(QObject):
             self.playback_completed.emit()
     
     def stop(self):
-        """Stop playback"""
         if self.playing:
             self.stop_event.set()
             if self.play_thread:
@@ -99,7 +96,6 @@ class ActionPlayer(QObject):
         return False
     
     def _execute_action(self, action):
-        """Execute a single action"""
         action_type = action.get('type', '')
         data = action.get('data', {})
         
@@ -159,7 +155,31 @@ class ActionPlayer(QObject):
                     return self.adb_controller.tap(cx, cy) is not None
                 
                 return match is not None
-            
+
+            elif action_type == ActionType.CONDITION.value:
+                if self.condition_checker is None or self.opencv_processor is None:
+                    self.playback_error.emit("Conditional action requires OpenCV processor")
+                    return False
+                condition = data.get('condition', {})
+                actions = data.get('actions', [])
+                else_actions = data.get('else_actions', [])
+
+                condition_met = self.condition_checker.check_condition(condition)
+
+                target_actions = actions if condition_met else else_actions
+
+                success = True
+                for sub_action in target_actions:
+                    if self.stop_event.is_set():
+                        break
+
+                    sub_success = self._execute_action(sub_action)
+                    if not sub_success:
+                        success = False
+                        break
+
+                return success
+
             else:
                 self.playback_error.emit(f"Unknown action type: {action_type}")
                 return False

@@ -4,8 +4,7 @@ from PyQt5.QtCore import Qt
 import os
 
 class ThemeManager:
-    """Manages application themes"""
-    
+
     def __init__(self):
         # Define theme directories
         self.themes_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "themes")

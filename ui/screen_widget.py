@@ -3,8 +3,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QRect, QPoint
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QCursor, QMouseEvent
 
 class ScreenWidget(QLabel):
-    """Custom widget for displaying and interacting with device screen"""
-    
+
     # Signals
     tap_event = pyqtSignal(int, int, int, int)  # x, y, device_x, device_y
     swipe_event = pyqtSignal(int, int, int, int, int, int, int, int, int)  # start_x, start_y, end_x, end_y, device_start_x, device_start_y, device_end_x, device_end_y, duration

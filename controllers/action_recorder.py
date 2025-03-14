@@ -10,10 +10,10 @@ class ActionType(Enum):
     TEXT = "text"
     LONG_PRESS = "long_press"
     TEMPLATE_MATCH = "template_match"
+    CONDITIONAL = "conditional"
 
 class ActionRecorder:
-    """Records and manages user actions for playback"""
-    
+
     def __init__(self):
         self.actions = []
         self.recording = False
@@ -82,7 +82,15 @@ class ActionRecorder:
             'max_wait': max_wait,
             'tap': tap
         })
-    
+
+    def add_conditional_action(self, condition, actions, else_actions=None):
+
+        return self.add_action(ActionType.CONDITIONAL, {
+            'condition': condition,
+            'actions': actions,
+            'else_actions': else_actions or []
+        })
+
     def remove_action(self, index):
         """Remove an action by index"""
         if 0 <= index < len(self.actions):
@@ -140,7 +148,6 @@ class ActionRecorder:
         self.actions = []
         
     def get_action_description(self, action):
-        """Get a human-readable description of an action"""
         action_type = action.get('type', '')
         data = action.get('data', {})
         
@@ -169,5 +176,16 @@ class ActionRecorder:
                 action_str += " and tap"
             return action_str
         
+        elif action_type == ActionType.CONDITIONAL.value:
+            condition = data.get('condition', {})
+            condition_type = condition.get('type', 'unknown')
+            num_actions = len(data.get('actions', []))
+            num_else_actions = len(data.get('else_actions', []))
+
+            description = f"If {condition_type} then {num_actions} action(s)"
+            if num_else_actions > 0:
+                description += f", else {num_else_actions} action(s)"
+            return description
+
         else:
             return f"Unknown action: {action_type}"
