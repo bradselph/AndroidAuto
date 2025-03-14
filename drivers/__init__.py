@@ -20,7 +20,6 @@ class DriverManager:
         self.scrcpy_dir = os.path.join(self.drivers_dir, "scrcpy")
 
         os.makedirs(self.drivers_dir, exist_ok=True)
-        os.makedirs(self.adb_dir, exist_ok=True)
         os.makedirs(self.scrcpy_dir, exist_ok=True)
 
         self.system = platform.system()
@@ -32,7 +31,7 @@ class DriverManager:
             self.adb_exec = "adb"
             self.scrcpy_exec = "scrcpy"
 
-        self.adb_path = os.path.join(self.adb_dir, self.adb_exec)
+        self.adb_path = os.path.join(self.scrcpy_dir, self.adb_exec)
         self.scrcpy_path = os.path.join(self.scrcpy_dir, self.scrcpy_exec)
 
     def check_drivers(self):
@@ -45,6 +44,10 @@ class DriverManager:
         }
 
     def download_adb(self):
+        if os.path.exists(os.path.join(self.scrcpy_dir, self.adb_exec)):
+            self.adb_path = os.path.join(self.scrcpy_dir, self.adb_exec)
+            return True, "ADB found in scrcpy directory"
+
         url = None
 
         if self.system == "Windows":
@@ -88,7 +91,7 @@ class DriverManager:
         url = None
 
         if self.system == "Windows":
-            url = "https://github.com/Genymobile/scrcpy/releases/download/v2.0/scrcpy-win64-v2.0.zip"
+            url = "https://github.com/Genymobile/scrcpy/releases/download/v3.1/scrcpy-win64-v3.1.zip"
 
         if not url:
             return False, "Automatic installation not supported for this OS. Please install scrcpy manually."
@@ -109,12 +112,19 @@ class DriverManager:
 
             os.remove(temp_file)
 
+            if os.path.exists(os.path.join(self.scrcpy_dir, self.adb_exec)):
+                self.adb_path = os.path.join(self.scrcpy_dir, self.adb_exec)
+
             return True, "scrcpy installed successfully"
 
         except Exception as e:
             return False, f"Failed to install scrcpy: {str(e)}"
 
     def get_adb_path(self):
+        scrcpy_adb_path = os.path.join(self.scrcpy_dir, self.adb_exec)
+        if os.path.exists(scrcpy_adb_path):
+            return scrcpy_adb_path
+
         if os.path.exists(self.adb_path):
             return self.adb_path
 

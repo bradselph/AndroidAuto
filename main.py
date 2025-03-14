@@ -19,11 +19,11 @@ def initialize_app():
 def main():
     app = QApplication(sys.argv)
 
-    splash_pix = QPixmap(500, 300)
-    splash_pix.fill(Qt.white)
-    splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint)
+    splash_widget = QWidget()
+    splash_widget.setFixedSize(500, 300)
+    splash_widget.setWindowFlags(Qt.SplashScreen | Qt.WindowStaysOnTopHint)
 
-    splash_layout = QVBoxLayout()
+    splash_layout = QVBoxLayout(splash_widget)
     splash_layout.addWidget(QLabel("Android Automation Tool"))
     splash_layout.addWidget(QLabel("Initializing..."))
 
@@ -32,24 +32,33 @@ def main():
     progress.setValue(0)
     splash_layout.addWidget(progress)
 
-    splash_widget = QWidget()
-    splash_widget.setLayout(splash_layout)
-
-    splash.show()
+    splash_widget.show()
     app.processEvents()
 
-    config_manager, driver_manager, driver_status = initialize_app()
+    try:
+        config_manager, driver_manager, driver_status = initialize_app()
 
-    progress.setValue(50)
-    app.processEvents()
+        progress.setValue(50)
+        app.processEvents()
 
-    window = MainWindow(config_manager, driver_manager)
+        window = MainWindow(config_manager, driver_manager)
 
-    progress.setValue(100)
-    app.processEvents()
+        progress.setValue(100)
+        app.processEvents()
 
-    QTimer.singleShot(1000, splash.close)
-    QTimer.singleShot(1000, window.show)
+        QTimer.singleShot(1000, splash_widget.close)
+        QTimer.singleShot(1100, window.show)
+    except Exception as e:
+        error_label = QLabel(f"Error initializing application: {str(e)}")
+        error_label.setWordWrap(True)
+        splash_layout.addWidget(error_label)
+        app.processEvents()
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(app.quit)
+        splash_layout.addWidget(close_btn)
+
+        QTimer.singleShot(30000, app.quit)
 
     sys.exit(app.exec_())
 
