@@ -23,17 +23,21 @@ class ActionPlayer(QObject):
         self.current_index = -1
         self.play_thread = None
         self.stop_event = threading.Event()
-    
+        self.action_delay = 0
+
     def load_actions(self, actions):
         self.actions = actions
     
-    def play(self, speed_factor=1.0, start_index=0):
+    def play(self, speed_factor=1.0, start_index=0, action_delay=0):
         if not self.actions or self.playing or start_index >= len(self.actions):
             return False
         
         # Reset stop event
         self.stop_event.clear()
         
+        # Set action delay
+        self.action_delay = action_delay
+
         # Start playback in a separate thread
         self.play_thread = threading.Thread(
             target=self._play_thread, 
@@ -78,7 +82,10 @@ class ActionPlayer(QObject):
                 if not success:
                     self.playback_error.emit(f"Failed to execute action: {action.get('type')}")
                     break
-        
+
+                if self.action_delay > 0 and i < len(self.actions) - 1:
+                    time.sleep(self.action_delay / 1000.0)
+
         except Exception as e:
             self.playback_error.emit(f"Error during playback: {str(e)}")
         
@@ -156,7 +163,7 @@ class ActionPlayer(QObject):
                 
                 return match is not None
 
-            elif action_type == ActionType.CONDITION.value:
+            elif action_type == ActionType.CONDITIONAL.value:
                 if self.condition_checker is None or self.opencv_processor is None:
                     self.playback_error.emit("Conditional action requires OpenCV processor")
                     return False

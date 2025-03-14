@@ -14,6 +14,7 @@ from controllers.action_recorder import ActionRecorder, ActionType
 from controllers.action_player import ActionPlayer
 from controllers.opencv_processor import OpenCVProcessor
 from controllers.scheduler import TaskScheduler, ScheduleType
+from controllers.condition_checker import ConditionChecker, ConditionType
 from ui.screen_widget import ScreenWidget
 from ui.themes import ThemeManager
 from utils.config_manager import ConfigManager
@@ -438,6 +439,15 @@ class MainWindow(QMainWindow):
         self.speed_spin.setSuffix("%")
         speed_layout.addWidget(self.speed_spin)
         
+        # Action delay control
+        delay_layout = QHBoxLayout()
+        delay_layout.addWidget(QLabel("Action Delay:"))
+        self.action_delay_spin = QSpinBox()
+        self.action_delay_spin.setRange(0, 5000)
+        self.action_delay_spin.setValue(0)
+        self.action_delay_spin.setSuffix(" ms")
+        delay_layout.addWidget(self.action_delay_spin)
+
         # Playback buttons
         buttons_layout = QHBoxLayout()
         self.play_btn = QPushButton("Play")
@@ -449,12 +459,13 @@ class MainWindow(QMainWindow):
         self.loop_check = QCheckBox("Loop playback")
         
         playback_layout.addLayout(speed_layout)
+        playback_layout.addLayout(delay_layout)
         playback_layout.addLayout(buttons_layout)
         playback_layout.addWidget(self.loop_check)
-        
+
         playback_group.setLayout(playback_layout)
         self.control_layout.addWidget(playback_group)
-    
+
     def init_settings_group(self):
         settings_group = QGroupBox("Settings")
         settings_layout = QVBoxLayout()
@@ -812,11 +823,12 @@ class MainWindow(QMainWindow):
         
         self.action_player.load_actions(self.action_recorder.actions)
         speed_factor = self.speed_spin.value() / 100.0
-        
+        action_delay = self.action_delay_spin.value()
+
         # Start playback in action player
-        if self.action_player.play(speed_factor):
+        if self.action_player.play(speed_factor, 0, action_delay):
             self.is_playing = True
-            self.log(f"Playing {len(self.action_recorder.actions)} actions at {speed_factor}x speed")
+            self.log(f"Playing {len(self.action_recorder.actions)} actions at {speed_factor}x speed with {action_delay}ms delay")
         else:
             self.log("Failed to start playback")
     
