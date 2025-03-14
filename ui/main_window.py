@@ -273,8 +273,9 @@ class MainWindow(QMainWindow):
 
         # Initialize controllers
         adb_path = self.driver_manager.get_adb_path()
+        self.adb_controller = AdbController(None)
+        self.adb_controller.adb_path = adb_path
         self.device_manager = DeviceManager(self.driver_manager)
-        self.adb_controller = AdbController(None, adb_path)
         self.opencv_processor = OpenCVProcessor(self.adb_controller)
         self.action_recorder = ActionRecorder()
         self.action_player = ActionPlayer(self.adb_controller, self.opencv_processor)
