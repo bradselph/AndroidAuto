@@ -4,7 +4,7 @@
 
 A powerful, open-source desktop application for automating interactions with Android devices using Python, ADB, OpenCV, and PyQt5.
 
-![Android Automation Tool Screenshot](docs/images/screenshot.png)
+![Android Automation Tool Screenshot](docs/images/Screenshot.png)
 
 ## Features
 
