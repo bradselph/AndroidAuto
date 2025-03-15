@@ -112,7 +112,7 @@ class OpenCVProcessor(QObject):
         cv2.rectangle(result, (x, y), (x + w, y + h), color, thickness)
         return result
     
-    def find_color(self, color_range, min_area=100):
+    def find_color(self, color_range, min_area=10):
         """Find regions of a specific color in the current frame"""
         if self.last_frame is None:
             return None

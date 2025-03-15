@@ -113,25 +113,28 @@ class AdbController(QObject):
         return self.adb_command(['input', 'text', safe_text], shell=True)
     
     def take_screenshot(self):
-        if os.path.exists(self.screenshot_path):
-            try:
-                os.remove(self.screenshot_path)
-            except OSError:
-                pass
-                
-        self.adb_command(['screencap', '-p', '/sdcard/screenshot.png'], shell=True)
-        
-        self.adb_command(['pull', '/sdcard/screenshot.png', self.screenshot_path])
-        
-        self.adb_command(['rm', '/sdcard/screenshot.png'], shell=True)
-        
-        if os.path.exists(self.screenshot_path):
-            try:
-                return cv2.imread(self.screenshot_path)
-            except Exception as e:
-                print(f"Error reading screenshot: {e}")
+        try:
+            cmd = [self.adb_path]
+            if self.device_id:
+                cmd.extend(['-s', self.device_id])
+            cmd.extend(['shell', 'screencap', '-p'])
+
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            screenshot_data, error = process.communicate()
+
+            if process.returncode != 0 or not screenshot_data:
+                print(f"Screenshot capture error: {error.decode('utf-8', errors='ignore')}")
                 return None
-        return None
+
+            if os.name == 'nt':
+                screenshot_data = screenshot_data.replace(b'\r\n', b'\n')
+
+            nparr = np.frombuffer(screenshot_data, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            return image
+        except Exception as e:
+            print(f"Error taking screenshot: {e}")
+            return None
     
     def get_device_dimensions(self):
         output = self.adb_command(['wm', 'size'], shell=True)
