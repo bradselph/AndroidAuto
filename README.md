@@ -64,13 +64,13 @@ The application will automatically download required drivers (ADB and scrcpy) on
 6. The device screen will appear in the application
 7. Start recording actions or create automation scripts
 
-For detailed instructions, see the [User Guide](USER_GUIDE.md).
+For detailed instructions, see the [User Guide](docs/USER_GUIDE.md).
 
 ## Documentation
 
-- [User Guide](USER_GUIDE.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [Roadmap](ROADMAP.md)
+- [User Guide](docs/USER_GUIDE.md)
+- [Contributing Guidelines](docs/CONTRIBUTING.md)
+- [Roadmap](docs/ROADMAP.md)
 
 ## License
 
