@@ -53,7 +53,7 @@ class ConditionChecker:
 
     def _check_color_present(self, data):
         color_range = data.get('color_range', None)
-        min_area = data.get('min_area', 100)
+        min_area = data.get('min_area', 10)
 
         if not color_range or len(color_range) != 2:
             return False

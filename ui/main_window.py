@@ -485,7 +485,7 @@ class MainWindow(QMainWindow):
         interval_layout = QHBoxLayout()
         interval_layout.addWidget(QLabel("Capture Interval:"))
         self.interval_spin = QSpinBox()
-        self.interval_spin.setRange(100, 2000)
+        self.interval_spin.setRange(10, 2000)
         self.interval_spin.setValue(200)
         self.interval_spin.setSuffix(" ms")
         interval_layout.addWidget(self.interval_spin)
@@ -823,12 +823,11 @@ class MainWindow(QMainWindow):
         
         self.action_player.load_actions(self.action_recorder.actions)
         speed_factor = self.speed_spin.value() / 100.0
-        action_delay = self.action_delay_spin.value()
 
         # Start playback in action player
-        if self.action_player.play(speed_factor, 0, action_delay):
+        if self.action_player.play(speed_factor):
             self.is_playing = True
-            self.log(f"Playing {len(self.action_recorder.actions)} actions at {speed_factor}x speed with {action_delay}ms delay")
+            self.log(f"Playing {len(self.action_recorder.actions)} actions at {speed_factor}x speed")
         else:
             self.log("Failed to start playback")
     
